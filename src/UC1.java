@@ -9,7 +9,7 @@
  * @version 1.0
  */
 
-public class UseCase1BookMyStayApp {
+public class UC1 {
 
     public static void main(String[] args) {
 
