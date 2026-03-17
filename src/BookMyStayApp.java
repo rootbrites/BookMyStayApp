@@ -96,7 +96,7 @@ class BookingProcessor extends Thread {
 }
 
 // Main
-public class UseCase11ConcurrentBookingSimulation {
+public class BookMyStayApp {
 
     public static void main(String[] args) {
 
