@@ -1,122 +1,161 @@
-/**
- * Use Case 6: Reservation Confirmation & Room Allocation
- * Book My Stay App
- * Version: 6.1
- */
-
 import java.util.*;
 
-// Reservation request
+/**
+ * ==========================================================
+ * Use Case 6: Room Allocation & Reservation Confirmation
+ * ==========================================================
+ */
+
+// Reservation (same as UC5)
 class Reservation {
-    String guestName;
-    String roomType;
+
+    private String guestName;
+    private String roomType;
 
     public Reservation(String guestName, String roomType) {
         this.guestName = guestName;
         this.roomType = roomType;
+    }
+
+    public String getGuestName() {
+        return guestName;
+    }
+
+    public String getRoomType() {
+        return roomType;
     }
 }
 
 // Inventory Service
 class InventoryService {
 
-    private HashMap<String, Integer> inventory;
+    private HashMap<String, Integer> inventory = new HashMap<>();
 
-    public InventoryService() {
-        inventory = new HashMap<>();
-
-        inventory.put("Single Room", 2);
-        inventory.put("Double Room", 2);
-        inventory.put("Suite Room", 1);
+    public void addRoomType(String type, int count) {
+        inventory.put(type, count);
     }
 
-    public int getAvailability(String roomType) {
-        return inventory.getOrDefault(roomType, 0);
+    public boolean isAvailable(String type) {
+        return inventory.getOrDefault(type, 0) > 0;
     }
 
-    public void decrementRoom(String roomType) {
-        inventory.put(roomType, inventory.get(roomType) - 1);
+    public void decrement(String type) {
+        inventory.put(type, inventory.get(type) - 1);
     }
 
     public void displayInventory() {
-        System.out.println("\nCurrent Inventory:");
-        for (String room : inventory.keySet()) {
-            System.out.println(room + " : " + inventory.get(room));
-        }
+        System.out.println("Current Inventory: " + inventory);
     }
 }
 
 // Booking Service
 class BookingService {
 
-    private InventoryService inventory;
-    private HashMap<String, Set<String>> allocatedRooms;
+    private Queue<Reservation> queue;
+    private InventoryService inventoryService;
 
-    public BookingService(InventoryService inventory) {
-        this.inventory = inventory;
-        allocatedRooms = new HashMap<>();
+    // Track all allocated rooms
+    private Set<String> allocatedRoomIds = new HashSet<>();
+
+    // Track rooms per type
+    private HashMap<String, Set<String>> roomTypeMap = new HashMap<>();
+
+    // Room ID counters
+    private HashMap<String, Integer> counters = new HashMap<>();
+
+    public BookingService(Queue<Reservation> queue, InventoryService inventoryService) {
+        this.queue = queue;
+        this.inventoryService = inventoryService;
     }
 
-    public void allocateRoom(Reservation reservation) {
+    // Generate unique room ID
+    private String generateRoomId(String type) {
 
-        String roomType = reservation.roomType;
+        int count = counters.getOrDefault(type, 0) + 1;
+        counters.put(type, count);
 
-        if (inventory.getAvailability(roomType) <= 0) {
-            System.out.println("No rooms available for " + roomType);
-            return;
+        return type.charAt(0) + String.valueOf(count);
+    }
+
+    public void processBookings() {
+
+        while (!queue.isEmpty()) {
+
+            Reservation r = queue.poll();
+
+            String type = r.getRoomType();
+
+            System.out.println("\nProcessing: " + r.getGuestName() + " → " + type);
+
+            if (inventoryService.isAvailable(type)) {
+
+                String roomId = generateRoomId(type);
+
+                // Ensure uniqueness (extra safety)
+                if (allocatedRoomIds.contains(roomId)) {
+                    System.out.println("Duplicate room ID detected! Skipping...");
+                    continue;
+                }
+
+                // ATOMIC LOGIC START
+                allocatedRoomIds.add(roomId);
+
+                roomTypeMap.putIfAbsent(type, new HashSet<>());
+                roomTypeMap.get(type).add(roomId);
+
+                inventoryService.decrement(type);
+                // ATOMIC LOGIC END
+
+                System.out.println("Booking Confirmed!");
+                System.out.println("Assigned Room ID: " + roomId);
+
+            } else {
+                System.out.println("No rooms available for " + type);
+            }
         }
+    }
 
-        // generate unique room ID
-        String roomId = roomType.replace(" ", "") + "_" + UUID.randomUUID().toString().substring(0, 5);
+    public void displayAllocations() {
 
-        // ensure set exists
-        allocatedRooms.putIfAbsent(roomType, new HashSet<>());
+        System.out.println("\nRoom Allocations:");
 
-        Set<String> roomSet = allocatedRooms.get(roomType);
-
-        if (!roomSet.contains(roomId)) {
-
-            roomSet.add(roomId);
-
-            // update inventory
-            inventory.decrementRoom(roomType);
-
-            System.out.println("Reservation Confirmed");
-            System.out.println("Guest: " + reservation.guestName);
-            System.out.println("Room Type: " + roomType);
-            System.out.println("Allocated Room ID: " + roomId);
-            System.out.println("----------------------------------");
+        for (String type : roomTypeMap.keySet()) {
+            System.out.println(type + " → " + roomTypeMap.get(type));
         }
     }
 }
 
+// Main Class
 public class BookMyStayApp {
 
     public static void main(String[] args) {
 
-        System.out.println("=================================");
-        System.out.println("Book My Stay - Hotel Booking System v6.1");
-        System.out.println("Room Allocation Service");
-        System.out.println("=================================");
+        System.out.println("=====================================");
+        System.out.println("UC6 - Room Allocation Service");
+        System.out.println("=====================================");
 
-        // Request Queue (FIFO)
-        Queue<Reservation> bookingQueue = new LinkedList<>();
+        // Step 1: Create Queue (from UC5)
+        Queue<Reservation> queue = new LinkedList<>();
 
-        bookingQueue.add(new Reservation("Alice", "Single Room"));
-        bookingQueue.add(new Reservation("Bob", "Double Room"));
-        bookingQueue.add(new Reservation("Charlie", "Single Room"));
+        queue.add(new Reservation("Alice", "Single"));
+        queue.add(new Reservation("Bob", "Single"));
+        queue.add(new Reservation("Charlie", "Double"));
+        queue.add(new Reservation("David", "Single"));
 
+        // Step 2: Inventory Setup
         InventoryService inventory = new InventoryService();
-        BookingService bookingService = new BookingService(inventory);
+        inventory.addRoomType("Single", 2);
+        inventory.addRoomType("Double", 1);
 
-        // Process queue
-        while (!bookingQueue.isEmpty()) {
+        // Step 3: Booking Service
+        BookingService bookingService =
+                new BookingService(queue, inventory);
 
-            Reservation request = bookingQueue.poll();
+        // Step 4: Process bookings
+        bookingService.processBookings();
 
-            bookingService.allocateRoom(request);
-        }
-
+        // Step 5: Show results
+        bookingService.displayAllocations();
         inventory.displayInventory();
     }
 }
